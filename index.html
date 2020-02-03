@@ -15,175 +15,115 @@
     </style>
   </head>
   <body>
-    <script type="text/javascript">
-      var mesh; // global mesh (for now)
-      let gJson = null;
-      let gBin = null;
-      function load_model( xhr ){
-        //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        // Download done, Save data and check if all raady to load.
-        console.log( "Download Complete : %s", xhr.responseURL );
-        switch( xhr.responseType ){
-          case "json":    gJson = xhr.response; break;
-          case "arraybuffer": gBin  = xhr.response; break;
-        }
-
-        if (!gJson || !gBin) return;
-
-        //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        console.log("loading_model...");
-        const MESH_NAME = "Base";
-
-        //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        // Some meshes are divided into seperate primatives, Each one needs to be loaded into
-        // a Buffer Geometry to be rendered. Most often you only have one primative per Mesh.
-        let prim  = GLTF.getMesh( MESH_NAME, gJson, gBin );
-        let p   = prim[0]; // Grab First Primative ( information of Geometry )
-        //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        // Build Geometry Buffers for a Mesh. This is similar to WebGL 2's VAO sort of functionality.
-        const geometry = new Geometry(gl, 
-        {
-          position: {size: p.vertices.compLen, data: new Float32Array(p.vertices.data)},
-          uv: {size: p.uv.compLen, data: new Float32Array(p.uv.data)},
-          normal: {size: p.normal.compLen, data: new Float32Array(p.normal.data)},
-          index: {size: p.indices.compLen, data: new Uint16Array(p.indices.data)}
-        });
-
-        // QUICK PROGRAM
-        const program = new Program(gl,{
-          vertex: `
-            precision highp float;
-            attribute vec3 position;
-            attribute vec2 uv;
-            attribute vec3 normal;
-
-            varying vec2 vUv;
-            varying vec3 vNormal;
-
-            uniform mat4 modelViewMatrix;
-            uniform mat4 projectionMatrix;
-
-            void main() {
-                vUv = uv;
-                vNormal = normal;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-          `,
-          fragment: `
-            precision highp float;
-            varying vec2 vUv;
-            varying vec3 vNormal;
-
-            void main() {
-              vec3 normal = normalize(vNormal);
-              vec3 light = normalize(vec3(0.5, 1.0, -0.3));
-              float shading = dot(normal, light) * 0.25 - 0.25;
-              
-              gl_FragColor.rgb = vec3(1.0 + shading);
-              gl_FragColor.a = 1.0;
-            }
-          `
-        });
-        console.log(p);
-        // MESHES
-        mesh = new Mesh(gl, {geometry: geometry, program: program});
-        mesh.setParent(scene);
-      }
-    </script>
-    <script type="text/javascript">
-      window.addEventListener("load", function()
-      {
-
-      });
-    </script>
-    <script type="text/javascript">
-      function download_file( url, type, cb=null )
-      {
-        let xhr = new XMLHttpRequest();
-        xhr.addEventListener( "load", xhr_on_complete ,false);
-        xhr.addEventListener( "error", xhr_on_error, false);
-        xhr.addEventListener( "abort", xhr_on_error, false);
-        xhr.addEventListener( "timeout", xhr_on_error, false);
-
-        xhr.open( "GET", url );
-        xhr.responseType  = type;
-        xhr.call_back   = cb;
-
-        try{
-          xhr.send();
-        }catch(err){
-          console.error("XHR ERROR SEND - ",err);
-        }
-      }
-
-      function xhr_on_error( e ){ console.error("XHR ERROR EVENT - ", e ); }
-      function xhr_on_complete( e )
-      {
-        //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        let xhr = e.srcElement;
-        if(xhr.status != 200){
-          console.error("XHR STATUS ERROR %s - url: %s ", xhr.status, xhr.responseURL );
-          console.log( xhr );
-          return;
-        }
-        //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        if( xhr.call_back ) xhr.call_back( xhr );
-      }
-    </script>
-    <script type="text/javascript">
-      // CREATE GLOBAL VARIABLES
-      var renderer;
-      var gl;
-      var camera;
-      var scene;
-    </script>
-    <script src="Gltf.js"></script>
     <script type="module">
-      import * as exports from './ogl/index.mjs';
-      Object.entries(exports).forEach(([name, exported]) => window[name] = exported);
-      {
-        // RENDERER
-        renderer = new Renderer({
-            width: window.innerWidth,
-            height: window.innerHeight,
-            alpha: false,
-        });
+      import {GLTFLoader} from './GLTFLoader.js';
+      import {Renderer, Camera, Transform, Program, Mesh, Box} from './ogl/index.mjs';
 
-        gl = renderer.gl;
-        renderer.gl.canvas.classList.add("mainCanvas");
-        document.body.appendChild(gl.canvas);
+      // RENDERER
+      const renderer = new Renderer({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+      const gl = renderer.gl;
+      document.body.appendChild(gl.canvas);
 
-        // CAMERA
-        camera = new Camera(gl, {fov: 35});
-        camera.position.set(0, 0, 10);
-        camera.lookAt([0, 0, 0]);
+      // CAMERA
+      const camera = new Camera(gl, {fov: 35});
+      camera.position.set(0, 0, 5);
+      camera.lookAt([0, 0, 0]);
 
-        function resize() {
+      function resize() {
             renderer.setSize(window.innerWidth, window.innerHeight);
             camera.perspective({aspect: gl.canvas.width / gl.canvas.height});
         }
         window.addEventListener('resize', resize, false);
         resize();
 
-        // SCENE
-        scene = new Transform();
+      // SCENE
+      const scene = new Transform();
 
-        // GLTF LOAD MODEL
-        download_file( "./spiked_ball.gltf", "json", load_model );
-        download_file( "./spiked_ball.bin", "arraybuffer", load_model );
-        
-        function renderLoop(dt)
-        {
-          requestAnimationFrame(renderLoop);
-          dt *= 0.001; dt *= 0.5;
-          if (mesh)
-          {
-            mesh.rotation.y = dt;
-            mesh.rotation.x = dt * 2;
+      // QUICK PROGRAM
+      const program = new Program(gl,{
+        vertex: `
+          precision highp float;
+          attribute vec3 position;
+          attribute vec2 uv;
+          attribute vec3 normal;
+
+          varying vec2 vUv;
+          varying vec3 vNormal;
+
+          uniform mat4 modelViewMatrix;
+          uniform mat4 projectionMatrix;
+
+          void main() {
+              vUv = uv;
+              vNormal = normal;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           }
-          renderer.render({scene, camera});
+        `,
+        fragment: `
+          precision highp float;
+          varying vec2 vUv;
+          varying vec3 vNormal;
+
+          void main() {
+            vec3 normal = normalize(vNormal);
+            vec3 light = normalize(vec3(0.5, 1.0, -0.3));
+            float shading = dot(normal, light) * 0.25 - 0.25;
+            
+            gl_FragColor.rgb = vec3(1.0 + shading);
+            gl_FragColor.a = 1.0;
+          }
+        `
+      });
+
+      const triangleProgram = new Program(gl, {
+        vertex: `
+            attribute vec3 position;
+
+            uniform mat4 modelViewMatrix;
+            uniform mat4 projectionMatrix;
+
+            void main() {
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+            `,
+        fragment: `
+            void main() {
+                gl_FragColor = vec4(1.0);
+            }
+        `,
+      });
+
+      let models = [];
+      loadModels();
+      async function loadModels() {
+        const geometry1 = await GLTFLoader.load(gl, 'spiked_ball.gltf');
+        const geometry2 = await GLTFLoader.load(gl, 'Avocado.gltf');
+        const geometry3 = await GLTFLoader.load(gl, 'simpleTriangle.gltf');
+        const boxGeo    = new Box(gl);
+        models.push(new Mesh(gl, {geometry: geometry1, program}));
+        models.push(new Mesh(gl, {geometry: geometry2, program}));
+        models.push(new Mesh(gl, {geometry: geometry3, program: triangleProgram}));
+        
+        models[1].position.z = 4.5;
+
+        for (let i = 0; i < models.length; ++i){
+          models[i].position.x = i - 1;
+          scene.addChild(models[i]);
         }
-      requestAnimationFrame(renderLoop);
+      }
+
+      requestAnimationFrame(update);
+      function update(t) {
+        requestAnimationFrame(update);
+        t *= 0.001;
+        if (models.length === 3) models.forEach(mesh => {
+          mesh.rotation.y = t * 0.5;
+          mesh.rotation.x = t;
+        });
+        renderer.render({scene, camera});
       }
     </script>
   </body>
