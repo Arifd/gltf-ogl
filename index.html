@@ -17,7 +17,7 @@
   <body>
     <script type="module">
       import {GLTFLoader} from './GLTFLoader.js';
-      import {Renderer, Camera, Transform, Program, Mesh, Box} from './ogl/index.mjs';
+      import {Renderer, Camera, Transform, Program, Mesh} from './ogl/index.mjs';
 
       // RENDERER
       const renderer = new Renderer({
@@ -33,11 +33,11 @@
       camera.lookAt([0, 0, 0]);
 
       function resize() {
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            camera.perspective({aspect: gl.canvas.width / gl.canvas.height});
-        }
-        window.addEventListener('resize', resize, false);
-        resize();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.perspective({aspect: gl.canvas.width / gl.canvas.height});
+      }
+      window.addEventListener('resize', resize, false);
+      resize();
 
       // SCENE
       const scene = new Transform();
@@ -102,7 +102,6 @@
         const geometry1 = await GLTFLoader.load(gl, 'spiked_ball.gltf');
         const geometry2 = await GLTFLoader.load(gl, 'Avocado.gltf');
         const geometry3 = await GLTFLoader.load(gl, 'simpleTriangle.gltf');
-        const boxGeo    = new Box(gl);
         models.push(new Mesh(gl, {geometry: geometry1, program}));
         models.push(new Mesh(gl, {geometry: geometry2, program}));
         models.push(new Mesh(gl, {geometry: geometry3, program: triangleProgram}));
