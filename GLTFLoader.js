@@ -22,15 +22,18 @@ export class GLTFLoader
 		// Extract raw geometry data
 		let extractedGLTFData = this.getMesh(gltf, bin);
 
+
 		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 		// Convert extracted data into OGL Geometry attributes format
 		let attributes = {};
-		for (const property in extractedGLTFData.attributes){
-			if (property === "POSITION") attributes.position = {size: extractedGLTFData.attributes[property].size, data: extractedGLTFData.attributes[property].data};
-			else if (property === "NORMAL") attributes.normal = {size: extractedGLTFData.attributes[property].size, data: extractedGLTFData.attributes[property].data};
-			else if (property === "TEXCOORD_0") attributes.uv = {size: extractedGLTFData.attributes[property].size, data: extractedGLTFData.attributes[property].data};
-			else attributes[property] = {size: extractedGLTFData.attributes[property].size, data: extractedGLTFData.attributes[property].data}
-		}
+		for (const property in extractedGLTFData.attributes)
+			switch(property)
+			{
+				case "POSITION": attributes.position = {size: extractedGLTFData.attributes[property].size, data: extractedGLTFData.attributes[property].data}; break;
+				case "NORMAL": attributes.normal = {size: extractedGLTFData.attributes[property].size, data: extractedGLTFData.attributes[property].data}; break;
+				case "TEXCOORD_0": attributes.uv = {size: extractedGLTFData.attributes[property].size, data: extractedGLTFData.attributes[property].data}; break;
+				default: attributes[property] = {size: extractedGLTFData.attributes[property].size, data: extractedGLTFData.attributes[property].data};
+			}
 		if (extractedGLTFData.indices) attributes.index = {size: extractedGLTFData.indices.size, data: extractedGLTFData.indices.data};
 
 		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
