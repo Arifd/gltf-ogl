@@ -63,7 +63,7 @@ export class GLTFLoader
     }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    return cookedMeshes; // @Gordonnl: "this should return an object holding the different content. At the moment that would just be a gltf.geometries array, made up of objects with a name and an OGL Geometry attached."
+    return {meshes: cookedMeshes};
   }
 
   static async loadJSON(src) {
@@ -181,7 +181,7 @@ export class GLTFLoader
     }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    return {data: data, size: componentLength}
+    return {data: data, size: componentLength};
   }
 }
 
