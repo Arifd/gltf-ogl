@@ -103,9 +103,9 @@
         const geometry1 = await GLTFLoader.load(gl, 'spiked_ball.gltf');
         const geometry2 = await GLTFLoader.load(gl, 'Avocado.gltf');
         const geometry3 = await GLTFLoader.load(gl, 'BoxInterleaved.gltf');
-        models.push(new Mesh(gl, {geometry: geometry1[0].geometry, program}));
-        models.push(new Mesh(gl, {geometry: geometry2[0].geometry, program}));
-        models.push(new Mesh(gl, {geometry: geometry3[0].geometry, program}));
+        models.push(new Mesh(gl, {geometry: geometry1[0][0].geometry, program}));
+        models.push(new Mesh(gl, {geometry: geometry2[0][0].geometry, program}));
+        models.push(new Mesh(gl, {geometry: geometry3[0][0].geometry, program}));
         
         models[1].position.z = 4.5;
 

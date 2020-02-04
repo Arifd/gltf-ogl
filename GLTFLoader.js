@@ -22,42 +22,48 @@ export class GLTFLoader
     let bin = await this.loadArrayBuffer(gltf.buffers[0].uri);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // Extract raw geometry data (the array of primitives)
-    let primitives = this.getMesh(gltf, bin);
+    // Extract raw mesh data 
+    let rawMeshes = this.getMesh(gltf, bin);
+    let cookedMeshes = [];
+    for (const rawMesh of rawMeshes)
+    {
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      // Convert array of primitives into array of gltf.geometry objects
+      let geometries = [];
+      for (const primitive of rawMesh)
+      {
+        // extract name
+        let name = primitive.name;
+
+        // extract and convert attributes to OGL Geometry object format
+        let attributes = {};
+        if (primitive.indices) attributes.index = {size: primitive.indices.size, data: primitive.indices.data};
+        for (const property in primitive.attributes)
+          switch(property)
+          {
+            case "POSITION":   attributes.position  = {size: primitive.attributes[property].size, data: primitive.attributes[property].data}; break;
+            case "NORMAL":     attributes.normal    = {size: primitive.attributes[property].size, data: primitive.attributes[property].data}; break;
+            case "TEXCOORD_0": attributes.uv        = {size: primitive.attributes[property].size, data: primitive.attributes[property].data}; break;
+            default:           attributes[property] = {size: primitive.attributes[property].size, data: primitive.attributes[property].data}; break;
+          }
+
+        //..........................................................
+        // Add attributes to a OGL Geometry object
+        let geometry = new Geometry(gl, attributes);
+
+        //..........................................................
+        // write out to the gltf.geometries object
+        geometries.push({
+                           name,
+                           geometry
+        });
+      }
+
+      cookedMeshes.push(geometries);
+    }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // Convert array of primitives into array of gltf.geometry objects
-    let geometries = [];
-    for (const primitive of primitives){
-      // extract name
-      let name = primitive.name;
-
-      // extract and convert attributes to OGL Geometry object format
-      let attributes = {};
-      if (primitive.indices) attributes.index = {size: primitive.indices.size, data: primitive.indices.data};
-      for (const property in primitive.attributes)
-        switch(property)
-        {
-          case "POSITION":   attributes.position  = {size: primitive.attributes[property].size, data: primitive.attributes[property].data}; break;
-          case "NORMAL":     attributes.normal    = {size: primitive.attributes[property].size, data: primitive.attributes[property].data}; break;
-          case "TEXCOORD_0": attributes.uv        = {size: primitive.attributes[property].size, data: primitive.attributes[property].data}; break;
-          default:           attributes[property] = {size: primitive.attributes[property].size, data: primitive.attributes[property].data}; break;
-        }
-
-      //..........................................................
-      // Add attributes to a OGL Geometry object
-      let geometry = new Geometry(gl, attributes);
-
-      //..........................................................
-      // write out to the gltf.geometries object
-      geometries.push({
-                         name,
-                         geometry
-      });
-  }
-
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    return geometries; // @Gordonnl: "this should return an object holding the different content. At the moment that would just be a gltf.geometries array, made up of objects with a name and an OGL Geometry attached."
+    return cookedMeshes; // @Gordonnl: "this should return an object holding the different content. At the moment that would just be a gltf.geometries array, made up of objects with a name and an OGL Geometry attached."
   }
 
   static async loadJSON(src) {
@@ -74,44 +80,49 @@ export class GLTFLoader
 
   static getMesh(json, bin)
   {
-    // Find mesh to parse out
-    // note: assuming only a single gltf mesh for now
-    
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // Parse primitive data
-    let primitives = [];
-    for (let i = 0; i < json.meshes[0].primitives.length; ++i)
+    // Find meshes to parse out
+    let meshes = [];
+    for (let i = 0; i < json.meshes.length; ++i)
     {
-      let primitive = json.meshes[0].primitives[i];
+      let mesh = json.meshes[i];
+    
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      // Parse every primitive for every mesh
+      let primitives = [];
+      for (let j = 0; j < mesh.primitives.length; ++j)
+      {
+        let primitive = mesh.primitives[j];
 
-      // Get a name for this primitive
-      let name = (primitive.name !== undefined)? primitive.name : "primitive: " + i;
+        // Get a name for this primitive
+        let name = (primitive.name !== undefined)? primitive.name : "primitive: " + j;
 
-      // How do we draw our geometry?
-      let mode = (primitive.mode !== undefined)? primitive.mode : GLTF.MODE_TRIANGLES;
+        // How do we draw our geometry?
+        let mode = (primitive.mode !== undefined)? primitive.mode : GLTF.MODE_TRIANGLES;
 
-      // Is buffer indexed?
-      let indices = (primitive.indices !== undefined)? this.parseAccessor(primitive.indices, json, bin) : null;
+        // Is buffer indexed?
+        let indices = (primitive.indices !== undefined)? this.parseAccessor(primitive.indices, json, bin) : null;
 
-      //..........................................................
-      // Parse attributes from the Bin file
-      let attributes = {};
-      for (const property in primitive.attributes){
-        attributes[property] = this.parseAccessor(primitive.attributes[property], json, bin);
+        //..........................................................
+        // Parse attributes from the Bin file
+        let attributes = {};
+        for (const property in primitive.attributes){
+          attributes[property] = this.parseAccessor(primitive.attributes[property], json, bin);
+        }
+
+        //..........................................................
+        // write out the extracted data to a primitives array
+        primitives.push({
+                           name,
+                           mode,
+                           indices,
+                           attributes
+        })
       }
-
-      //..........................................................
-      // write out the extracted data to a primitives array
-      primitives.push({
-                         name,
-                         mode,
-                         indices,
-                         attributes
-      })
+      meshes.push(primitives);
     }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    return primitives;
+    return meshes;
   }
 
   // Parse out a single buffer of data from the bin file based on an accessor index.
