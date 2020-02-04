@@ -149,14 +149,14 @@ export class GLTFLoader
       let dataView        = new DataView(bin);              // Access to Binary Array Buffer
       let k               = 0;                              // Position Index of new Type Array
 
-      data  = new arrayType(arrayLength);                 //Final Array
+      data  = new arrayType(arrayLength);                   //Final Array
 
       // Loop through each element of byte stride
       for (let i = 0; i < elementCount; i++){
         // Buffer Offset + (Total Stride * Element Index) + Sub Offset within Stride Component
-        let poisition = bufferOffset + (stride * i) + strideOffset; //Calc starting position for the stride of data
+        let position = bufferOffset + (stride * i) + strideOffset; //Calc starting position for the stride of data
         //Then loop by compLen to grab stuff out of the DataView and into the Typed Array
-        for (let j = 0; j < componentLength; j++) ary[k++] = dataView[func](position + (j * bytesPerElement), true);
+        for (let j = 0; j < componentLength; j++) data[k++] = dataView[func](position + (j * bytesPerElement), true);
       }
     }
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
