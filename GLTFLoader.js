@@ -6,42 +6,58 @@ export class GLTFLoader
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Create a gltf object from src
     let gltf = await this.loadJSON(src);
-    // error check:
+    
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Error checking
     if (gltf.asset === undefined || gltf.asset.version[0] < 2)
-        console.error("GLTFLoader: Only GLTF versions 2.0 and above are supported");
+        console.warn("GLTFLoader: Only GLTF versions 2.0 and above are supported. Attempting to parse anyway");
+    
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Locate the bin file
-    let bin = new ArrayBuffer();
-    if (gltf.buffers[0].uri.includes("data:"))
+    let buffer = gltf.buffers[0];
+    if (!buffer.uri || buffer.uri.includes("data:")){
       console.error("GLTFLoader: Currently only supports separate gltf and bin files");
-    else if (gltf.buffers[0].uri === undefined)
-      console.error("GLTFLoader: Currently only supports separate gltf and bin files");
-    else bin = await this.loadArrayBuffer(gltf.buffers[0].uri);
+      return null;
+    }
+    let bin = await this.loadArrayBuffer(gltf.buffers[0].uri);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // Extract raw geometry data
-    let extractedGLTFData = this.getMesh(gltf, bin);
-
-
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // Convert extracted data into OGL Geometry attributes format
-    let attributes = {};
-    for (const property in extractedGLTFData.attributes)
-      switch(property)
-      {
-        case "POSITION":   attributes.position  = {size: extractedGLTFData.attributes[property].size, data: extractedGLTFData.attributes[property].data}; break;
-        case "NORMAL":     attributes.normal    = {size: extractedGLTFData.attributes[property].size, data: extractedGLTFData.attributes[property].data}; break;
-        case "TEXCOORD_0": attributes.uv        = {size: extractedGLTFData.attributes[property].size, data: extractedGLTFData.attributes[property].data}; break;
-        default:           attributes[property] = {size: extractedGLTFData.attributes[property].size, data: extractedGLTFData.attributes[property].data};
-      }
-    if (extractedGLTFData.indices) attributes.index = {size: extractedGLTFData.indices.size, data: extractedGLTFData.indices.data};
+    // Extract raw geometry data (the array of primitives)
+    let primitives = this.getMesh(gltf, bin);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // Add to an OGL Geometry object
-    let geometry = new Geometry(gl, attributes);
+    // Convert array of primitives into array of gltf.geometry objects
+    let geometries = [];
+    for (const primitive of primitives){
+      // extract name
+      let name = primitive.name;
+
+      // extract and convert attributes to OGL Geometry object format
+      let attributes = {};
+      if (primitive.indices) attributes.index = {size: primitive.indices.size, data: primitive.indices.data};
+      for (const property in primitive.attributes)
+        switch(property)
+        {
+          case "POSITION":   attributes.position  = {size: primitive.attributes[property].size, data: primitive.attributes[property].data}; break;
+          case "NORMAL":     attributes.normal    = {size: primitive.attributes[property].size, data: primitive.attributes[property].data}; break;
+          case "TEXCOORD_0": attributes.uv        = {size: primitive.attributes[property].size, data: primitive.attributes[property].data}; break;
+          default:           attributes[property] = {size: primitive.attributes[property].size, data: primitive.attributes[property].data}; break;
+        }
+
+      //..........................................................
+      // Add attributes to a OGL Geometry object
+      let geometry = new Geometry(gl, attributes);
+
+      //..........................................................
+      // write out to the gltf.geometries object
+      geometries.push({
+                         name,
+                         geometry
+      });
+  }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    return geometry; // @Gordonnl: "this should return an object holding the different content. At the moment that would just be a gltf.geometries array, made up of objects with a name and an OGL Geometry attached."
+    return geometries; // @Gordonnl: "this should return an object holding the different content. At the moment that would just be a gltf.geometries array, made up of objects with a name and an OGL Geometry attached."
   }
 
   static async loadJSON(src) {
@@ -58,47 +74,66 @@ export class GLTFLoader
 
   static getMesh(json, bin)
   {
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Find mesh to parse out
-    // note: assuming only single primitive per single mesh for now
-    let primitive = json.meshes[0].primitives[0];
-
-    // How do we draw our geometry?
-    // let mode = (primitive.mode != undefined)? primitive.mode : GLTF.MODE_TRIANGLES;
-
+    // note: assuming only a single gltf mesh for now
+    
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // Parse out all the raw Geometry Data from the Bin file
-    let attributeData = {};
-    for (const property in primitive.attributes){
-      attributeData[property] = this.parseAccessor(primitive.attributes[property], json, bin);
+    // Parse primitive data
+    let primitives = [];
+    for (let i = 0; i < json.meshes[0].primitives.length; ++i)
+    {
+      let primitive = json.meshes[0].primitives[i];
+
+      // Get a name for this primitive
+      let name = (primitive.name !== undefined)? primitive.name : "primitive: " + i;
+
+      // How do we draw our geometry?
+      let mode = (primitive.mode !== undefined)? primitive.mode : GLTF.MODE_TRIANGLES;
+
+      // Is buffer indexed?
+      let indices = (primitive.indices !== undefined)? this.parseAccessor(primitive.indices, json, bin) : null;
+
+      //..........................................................
+      // Parse attributes from the Bin file
+      let attributes = {};
+      for (const property in primitive.attributes){
+        attributes[property] = this.parseAccessor(primitive.attributes[property], json, bin);
+      }
+
+      //..........................................................
+      // write out the extracted data to a primitives array
+      primitives.push({
+                         name,
+                         mode,
+                         indices,
+                         attributes
+      })
     }
-    let extractedGLTFData = {};
-    extractedGLTFData.attributes = attributeData;
-    if (primitive.indices !== undefined) extractedGLTFData.indices = this.parseAccessor(primitive.indices, json, bin);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    return extractedGLTFData;
+    return primitives;
   }
 
-  // Parse out a single buffer of data from the bin file based on an accessor index. (Vertices, Normal, etc)
+  // Parse out a single buffer of data from the bin file based on an accessor index.
+  // Credit to @SketchPunk for this function
   static parseAccessor(index, json, bin)
   {
-    let accessor        = json.accessors[index];                  // Reference to Accessor JSON Element
-    let bufferView      = json.bufferViews[accessor.bufferView];  // Buffer Information
-    let componentLength = GLTF["COMP_" + accessor.type];          // Component Length for Data Element
-    let data            = null;                                   // Final Type array that will be filled with data
-    let arrayType;                                                // Reference to Type Array to create
-    let func;                                                     // Reference to GET function in Type Array
+    let accessor        = json.accessors[index];                 // Reference to Accessor JSON Element
+    let bufferView      = json.bufferViews[accessor.bufferView]; // Buffer Information
+    let componentLength = GLTF["COMP_" + accessor.type];         // Component Length for Data Element
+    let data            = null;                                  // Final Type array that will be filled with data
+    let arrayType;                                               // Reference to Type Array to create
+    let func;                                                    // Reference to GET function in Type Array
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Figure out which Typed Array we need to save the data in
     switch(accessor.componentType){
-      case GLTF.TYPE_FLOAT:           arrayType = Float32Array;   func = "getFloat32";  break;
-      case GLTF.TYPE_SHORT:           arrayType = Int16Array;     func = "getInt16";    break;
-      case GLTF.TYPE_UNSIGNED_SHORT:  arrayType = Uint16Array;    func = "getUint16";   break;
-      case GLTF.TYPE_UNSIGNED_INT:    arrayType = Uint32Array;    func = "getUint32";   break;
-      case GLTF.TYPE_UNSIGNED_BYTE:   arrayType = Uint8Array;     func = "getUint8";    break;
-      default: console.error("GLTFLoader.ParseAccesor: componentType unknown; ", accessor.componentType); return null; break;
+      case GLTF.TYPE_FLOAT:          arrayType = Float32Array; func = "getFloat32"; break;
+      case GLTF.TYPE_SHORT:          arrayType = Int16Array;   func = "getInt16";   break;
+      case GLTF.TYPE_UNSIGNED_SHORT: arrayType = Uint16Array;  func = "getUint16";  break;
+      case GLTF.TYPE_UNSIGNED_INT:   arrayType = Uint32Array;  func = "getUint32";  break;
+      case GLTF.TYPE_UNSIGNED_BYTE:  arrayType = Uint8Array;   func = "getUint8";   break;
+      default: console.error("GLTFLoader.ParseAccesor: componentType unknown; ", accessor.componentType); return null;
     }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
