@@ -160,7 +160,7 @@ export class GLTFLoader
       }
     }
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // Data is NOT interlaced
+    // If data is NOT interlaced
     // https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#data-alignment
     // arrayType example from documentation works pretty well for data that is not interleaved.
     else{
