@@ -115,7 +115,7 @@ export class GLTFLoader
   }
 
   // Parse out a single buffer of data from the bin file based on an accessor index.
-  // Credit to @SketchPunk for this function
+  // Credit to @SketchPunk (http://sketchpunk.com/) for this function
   static parseAccessor(index, json, bin)
   {
     let accessor        = json.accessors[index];                 // Reference to Accessor JSON Element
